@@ -1,0 +1,120 @@
+\documentclass[a4paper, 11pt]{article}
+\usepackage[colorlinks=true, urlcolor=blue,linkcolor=blue]{hyperref}
+%\usepackage[a4paper]{geometry}
+\usepackage{geometry}
+\geometry{top=20mm,bottom=20mm}
+
+\title{Regression Model Project \\ Exploring Data for \textsc{Motor Trend}}
+\author{by Bruno \textsc{Berrehuel}\footnote{Heavily inspired by the book \textsc{R in action} from Robert \textsc{I. Kabacoff}}}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+The data was extracted from the 1974 Motor Trend US magazine, and comparises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles.\footnote{Source : \url{https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/mtcars.html}}
+This study explores the relationship between a set of variables and miles per gallon (MPG), and answers the two following questions :
+\begin{enumerate}
+    \item Is an automatic or manual transmission better for MPG~?
+    \item Quantify the MPG difference between automatic and manual transmission~?
+\end{enumerate}
+
+\noindent After statistical analysis of the \emph{mtcars} dataset\footnote{data exploratory, t.test confirmation and research of the best linear regression model with the \emph{regsubsets} function of the \emph{leaps} package}, \emph{manual transmission is better for gas mileage}, and a gain between \emph{7.031 and 21.1 mpg}, and a mean of \emph{14.1 mpg}, with 95 \% confidence, can be expected with a manual transmission in comparaison of an automatic transmission. BUT it depends on the weight of the vehicle too.
+The \emph{weight} of the vehicle, the \emph{qsec} (quarter mile time) and the interaction between \emph{transmission} and \emph{weight} parameters are to consider too. They define a linear regression model for MPG :
+\begin{displaymath}
+    mpg = 9.72 + 14.08*am - 2.94*wt + 1.12*qsec - 4.14*am:wt
+\end{displaymath}
+
+\section{Data exploratory}
+\subsection{Basic Exploratory}
+Graphic view of the gas mileage grouped by transmission type is presented in figure~\ref{fig:MPGTrans}.
+
+\noindent We can see that the manual transmission appears to be better for mpg, as shown by the means of the two groups.
+The influence of the other parameters, in order to find the best regression model, has to be quantified.
+
+\section{Further analysis}
+\subsection{comparing the means}
+The difference of the means, and most of it, the better performance of the manual transmission, is confirmed by the t.test function : the null hypothesis is rejected ($p<0.05$) in favor of the alternative hypothesis that the mean of MPG for automatic transmission is less than the mean of MPG for manual transmission.
+<<echo=TRUE, size="small", comment=NA>>=
+#compare auto and manual transmission MPG with a t.test :
+t.test(mpg~am,mtcars,alt="l")$p.value
+@
+
+
+\subsection{influence of other parameters}
+The linear model with all the possible predictors can't lead to any conclusion because the p.values can't allow to reject that a coefficient may be null, as shown in table~\ref{all}.
+However, with the use of the \emph{regsubsets} function of the \emph{leaps} package, the linear model can be limited to the following predictors : weight (wt), transmission (am) and quarter mile time (qsec), as shown in the figure~\ref{fig:leaps}.
+
+\subsection{fitting a model}
+With the information below, the linear model coefficients are shown in the table~\ref{bestFitCoef}.
+The predictors are significant different from zero ($p<0.05$), and the model seems good as shown with the plots in the figure~\ref{fig:verif}.
+The model can be improved by considering interactions between transmission (am) and weight (wt), as shown in the figure~\ref{fig:noInter}, with the better coefficients shown in table~\ref{noInter}, as their p-values are significants.
+This model describe \Sexpr{round(summary(bestFitInter)$r.squared,3)} \% of the variance.
+
+<<bestFitInter, size="small", echo=TRUE, comment=NA, results="asis">>=
+bestFitInter <- lm(mpg~am*wt+qsec,mtcars)
+xtable(summary(bestFitInter),
+       caption="best fit model - interaction am:wt",
+       label="noInter")
+@
+
+Finally, the 95 \% confidence intervals are the following for each predictors are shown in table~\ref{bestFitConf}.
+
+<<echo=TRUE, size="small", comment=NA, results="asis">>=
+xtable(confint(bestFitInter), 
+       caption="best fit model - confidence interval of the coefficents",
+       label="bestFitConf")
+@
+
+\newpage
+\appendix
+\section{Tables}
+<<echo=TRUE, size="small", comment=NA, results="asis">>=
+library(xtable)
+xtable(summary(lm(mpg~.,mtcars)),
+       caption="linear regression with all predictors",
+       label="all")
+@
+<<bestFit, size="small", echo=TRUE, comment=NA, results="asis">>=
+bestFit <- lm(mpg~am+wt+qsec,mtcars)
+xtable(summary(bestFit),
+       caption="fit model - linear regression coefficients",
+       label="bestFitCoef")
+@
+
+\section{Figures}
+<<MPGTrans, echo=FALSE, fig.height=5, fig.pos="!h", fig.align="center", fig.cap="Gas mileage grouped by transmission type">>=
+mtcarsOrdered <- mtcars[order(mtcars$mpg),]
+mtcarsOrdered$am <- factor(mtcarsOrdered$am,
+                           levels=c(1,0),
+                           labels=c("manual","auto"))
+mtcarsOrdered$color[mtcarsOrdered$am=="auto"] <- "red"
+mtcarsOrdered$color[mtcarsOrdered$am=="manual"] <- "darkgreen"
+autoTrans <- mtcars[mtcars$am==0,]
+manualTrans <- mtcars[mtcars$am==1,]
+
+dotchart(mtcarsOrdered$mpg,
+         labels=row.names(mtcarsOrdered),
+         groups = mtcarsOrdered$am,
+         xlab = "Miles Per Gallon",
+         color = mtcarsOrdered$color, pch=19, cex=0.7)
+abline(v=c(mean(autoTrans$mpg)), col="red", lty=5)
+abline(v=c(mean(manualTrans$mpg)), col="darkgreen", lty=5)
+legend("bottomright", title="Means", c("auto","manual"), lty=5, col=c("red", "darkgreen"))
+@
+
+<<leaps, echo=FALSE, fig.height=5, fig.cap="Determination of the best predictors">>=
+library(leaps)
+fitBest <- regsubsets(mpg~.,mtcars)
+plot(fitBest)
+@
+<<verif, echo=FALSE, fig.height=5, fig.pos="!h", fig.cap="Diagnostic plots for the regression of mpg">>=
+par(mfrow=c(2,2))
+plot(bestFit)
+@
+
+<<noInter, echo=FALSE, fig.height=5, fig.cap="Improved fit model">>=
+bestFitInter <- lm(mpg~am*wt+qsec,mtcars)
+par(mfrow=c(2,2))
+plot(bestFitInter)
+@
+\end{document}
